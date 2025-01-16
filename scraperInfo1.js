@@ -6,7 +6,7 @@ const axios = require("axios");
 
 async function extractTableData(page) {
     // Xác định bảng theo ID
-    const tableSelector = '#headerlefttable';
+    const tableSelector = '#dataTables-hdnd';
 
     // Kiểm tra xem bảng có tồn tại không
     const tableExists = await page.$(tableSelector);
@@ -41,7 +41,7 @@ async function extractTableData(page) {
 }
 async function extractBodyTableData(page) {
     // Xác định bảng theo ID
-    const tableSelector = '#bodytable';
+    const tableSelector = '#dataTables-hdnd';
 
     // Kiểm tra xem bảng có tồn tại không
     const tableExists = await page.$(tableSelector);
@@ -110,8 +110,6 @@ async function processDropdown(page, parentElement,parentIndex = '',id) {
 
         if(id==currentChildIndex){
             console.log(`=================> Clicking ${currentChildIndex}: `+ id);
-
-
             await child.click();
 
             break;
@@ -139,9 +137,6 @@ async function processDropdown(page, parentElement,parentIndex = '',id) {
 
         }
 
-
-
-
         // Recursively process the children if there are any
         await processDropdown(page, childElementsLi[i-1],currentChildIndex,id);
     }
@@ -150,11 +145,10 @@ async function processDropdown(page, parentElement,parentIndex = '',id) {
 
 
 
-async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,parentIndex = '') {
+async function processFilledRecordsInBatches(batchSize = 100,page, parentElement,parentIndex = '') {
     try {
         let offset = 0;
         let recordsProcessed = 0;
-        let i=0
 
         while (true) {
             // Fetch a batch of records
@@ -177,6 +171,7 @@ async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,
 
             console.log(`Processing batch with ${records.length} records (Offset: ${offset})`);
 
+            let i=0
             // Process each record in the batch
             for (const record of records) {
                 console.log(`Processing record with ID: ${record.parentId}, Name: ${record.name}`);
@@ -189,55 +184,23 @@ async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,
                         await processDropdown(page, parentElement,"TB",record.parentId);
 
                     }else {
+                        // Sau khi đăng nhập thành công, chuyển hướng đến URL cần lấy dữ liệu
                         const targetUrl = "https://quanlydoanvien.doanthanhnien.vn/bctk/bao-cao-yum";
                         await page.goto(targetUrl, { waitUntil: "networkidle2" });
-                        await page.waitForSelector('button.bdb-dropdown', { timeout: 10000 });
-                        await page.click('button.bdb-dropdown');
 
-                        await new Promise(resolve => setTimeout(resolve, 1000));
+
+
+                        // Wait and click the div
+                        await page.locator('div[role="tab"][id="mat-tab-label-0-1"]').click();
+
+                        console.log('Clicked the "Số liệu đoàn viên" tab.');
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        // Đợi dropdown xuất hiện và click vào
+                        await page.waitForSelector('button.bdb-dropdown', { visible: true });
+                        await page.click('button.bdb-dropdown');
 
                         // Đợi menu dropdown mở và lấy dữ liệu từ các mục trong menu
                         await page.waitForSelector('.dropdown-menu', { visible: true });
-
-                        // Bắt đầu từ danh sách cha
-                        // Tìm và chọn nút chứa "Tỉnh/Thành phố Tỉnh Thái Bình"
-                        // Tìm node "Tỉnh/Thành phố Tỉnh Thái Bình"
-
-                        const parentElement1 = await page.evaluateHandle(() => {
-                            const spans = document.querySelectorAll('span.haschild');
-                            for (let i = 0; i < spans.length; i++) {
-                                if (spans[i].textContent.trim() === "Tỉnh/Thành phố Tỉnh Thái Bình") {
-                                    const parentLi = spans[i].closest('li'); // Get the closest parent <li>
-                                    if (parentLi) {
-                                        const firstSpan = parentLi.querySelector('span.expand-button'); // Get the first span
-                                        return firstSpan; // Return the first span
-                                    }
-                                }
-                            }
-                            return null;
-                        });
-
-// Check if the parentElement was found
-                        if (parentElement1) {
-                            console.log("Found the target element. Clicking the first span...");
-
-                            // Log the HTML content of the parent element
-                            const parentHTML = await page.evaluate((el) => el.outerHTML, parentElement1);
-                            console.log("HTML of parentElement1:\n", parentHTML);
-
-                            // Click the first span
-                            await page.evaluate((el) => el.click(), parentElement1);
-                        } else {
-                            console.log("The target element was not found.");
-                        }
-                        if (!parentElement) {
-                            console.error("Could not find the specified node.");
-                            await browser.close();
-                            return;
-                        }
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-
-                        console.log("Starting recursion from 'Tỉnh/Thành phố Tỉnh Thái Bình'...");
 
                         const parentElementLi = await page.evaluateHandle(() => {
                             const spans = document.querySelectorAll('span.haschild');
@@ -255,9 +218,12 @@ async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,
 
                     }
 
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    console.log("===============> wait for loading data!")
+                    await page.waitForSelector('i.fa-refresh.fa-spin', { hidden: true, timeout: 30000 });
                     await new Promise(resolve => setTimeout(resolve, 10000));
 
-                    const tableDataName = await extractTableData(page)
+                    // const tableDataName = await extractTableData(page)
                     // Gọi hàm để lấy dữ liệu từ bảng
                     const tableData = await extractBodyTableData(page);
 
@@ -270,26 +236,15 @@ async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,
                         col5: row[4],   // Cột 5
                         col6: row[5],   // Cột 6
                         col7: row[6],   // Cột 7
-                        col8: row[7],   // Cột 8
-                        col9: row[8],   // Cột 9
-                        col10: row[9],  // Cột 10
-                        col11: row[10], // Cột 11
-                        col12: row[11], // Cột 12
-                        col13: row[12], // Cột 13
-                        col14: row[13], // Cột 14
-                        col15: row[14], // Cột 15
-                        col16: row[15], // Cột 16
-                        col17: row[16], // Cột 17
-                        col18: row[17], // Cột 18
+
                     }));
                     // console.log("Extracted tableDataName:", tableDataName);
                     // console.log("Extracted size:", tableDataName.length);
                     //
-                    // console.log("Extracted JSON Data:", JSON.stringify(jsonData, null, 2));
+                    console.log("Extracted JSON Data:", JSON.stringify(jsonData, null, 2));
                     // console.log("Extracted JSON Data length:", jsonData.length);
 
-                    for (let i = 0; i < tableDataName.length-1; i++) {
-                        const name = tableDataName[i][1]; // Extract the Name
+                    for (let i = 0; i < jsonData.length-1; i++) {
                         const data = jsonData[i]; // Extract the data for that name
 
 
@@ -304,37 +259,22 @@ async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,
                                     column4  = ?,
                                     column5  = ?,
                                     column6  = ?,
-                                    column7  = ?,
-                                    column8  = ?,
-                                    column9  = ?,
-                                    column10 = ?,
-                                    column11 = ?,
-                                    column12 = ?,
-                                    column13 = ?,
-                                    column14 = ?,
-                                    column15 = ?,
-                                    column16 = ?,
-                                    column17 = ?,
-                                    column18 = ?,
-                                    column19 = ?,
                                     isfilled = ?
                                 WHERE parentId = ?`;  // Update based on the `name` column
 
-                            console.log("===========> Updating record for : " + record.parentId);
+                            console.log("===========> Updating record for : " + data.col2);
 
                             // Execute the query to update the record
                             await new Promise((resolve, reject) => {
                                 db.query(updateQuery, [
-                                    name, data.col1, data.col2, data.col3, data.col4, data.col5, data.col6,
-                                    data.col7, data.col8, data.col9, data.col10, data.col11, data.col12,
-                                    data.col13, data.col14, data.col15, data.col16, data.col17, data.col18,2,
+                                     data.col2, data.col3, data.col4, data.col5, data.col6, data.col7, 2,
                                     record.parentId // Use `name` to match the record to be updated
                                 ], (updateErr) => {
                                     if (updateErr) {
                                         console.log("Error updating record: ", updateErr);
                                         return reject(updateErr); // Reject if there's an error
                                     }
-                                    console.log("Record updated successfully for: " + name);
+                                    console.log("Record updated successfully for: " +  data.col2);
                                     resolve(); // Resolve once the update is successful
                                 });
                             });
@@ -342,20 +282,16 @@ async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,
                         else {
                             // Insert new record for subsequent iterations
                             const insertQuery = `
-            INSERT INTO ToChucDoanVien (column1, column2, column3, column4, column5, column6,
-                column7, column8, column9, column10, column11, column12,
-                column13, column14, column15, column16, column17, column18,column19, parentId, name, isfilled)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?, 2)`; // Default `isFilled` to 1
+            INSERT INTO ToChucDoanVien (column1, column2, column3, column4, column5, column6, parentId, isfilled,name)
+            VALUES (?, ?, ?, ?, ?, ?,?, 2,?)`; // Default `isFilled` to 1
 
-                            console.log("===========> Inserting new record for name:", name);
+                            console.log("===========> Inserting new record for name:", data.col2);
 
                             // Execute the insert query
                             await new Promise((resolve, reject) => {
                                 db.query(insertQuery, [
-                                    name,data.col1, data.col2, data.col3, data.col4, data.col5, data.col6,
-                                    data.col7, data.col8, data.col9, data.col10, data.col11, data.col12,
-                                    data.col13, data.col14, data.col15, data.col16, data.col17, data.col18,
-                                    record.parentId, record.name // Use `name` and `parentId` for the new record
+                                    data.col2, data.col3, data.col5, data.col5, data.col6, data.col7,
+                                     record.parentId, record.name // Use `name` and `parentId` for the new record
                                 ], (insertErr) => {
                                     if (insertErr) {
                                         console.error("Error inserting record:", insertErr);
@@ -377,9 +313,7 @@ async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,
 
                 } catch (recordError) {
                     console.error(`Error processing record with ID ${record.parentId}:`, recordError);
-                    // Sau khi đăng nhập thành công, chuyển hướng đến URL cần lấy dữ liệu
-                    const targetUrl = "https://quanlydoanvien.doanthanhnien.vn/bctk/bao-cao-yum";
-                    await page.goto(targetUrl, { waitUntil: "networkidle2" });
+
                 }
             }
 
@@ -425,8 +359,8 @@ async function scrapeInfor() {
         await page.waitForSelector('form.login-form');
 
         // Input username and password
-        const username = "tkkiemdinh_captw"; // Replace with your username
-        const password = "Btc@406"; // Replace with your password
+        const username = "tinhdoanthaibinh.tbh"; // Replace with your username
+        const password = "123@xaydungdoan"; // Replace with your password
 
         await page.type('input[formcontrolname="username"]', username); // Adjust the selector
         await page.type('input[formcontrolname="password"]', password); // Adjust the selector
@@ -447,8 +381,11 @@ async function scrapeInfor() {
 
 
 
-        // await new Promise(resolve => setTimeout(resolve, 10000));
+        // Wait and click the div
+        await page.locator('div[role="tab"][id="mat-tab-label-0-1"]').click();
 
+        console.log('Clicked the "Số liệu đoàn viên" tab.');
+        await new Promise(resolve => setTimeout(resolve, 2000));
         // Đợi dropdown xuất hiện và click vào
         await page.waitForSelector('button.bdb-dropdown', { visible: true });
         await page.click('button.bdb-dropdown');
@@ -456,41 +393,8 @@ async function scrapeInfor() {
         // Đợi menu dropdown mở và lấy dữ liệu từ các mục trong menu
         await page.waitForSelector('.dropdown-menu', { visible: true });
 
-        // Bắt đầu từ danh sách cha
-        // Tìm và chọn nút chứa "Tỉnh/Thành phố Tỉnh Thái Bình"
-        // Tìm node "Tỉnh/Thành phố Tỉnh Thái Bình"
-        const parentElement = await page.evaluateHandle(() => {
-            const spans = document.querySelectorAll('span.haschild');
-            for (let i = 0; i < spans.length; i++) {
-                if (spans[i].textContent.trim() === "Tỉnh/Thành phố Tỉnh Thái Bình") {
-                    const parentLi = spans[i].closest('li'); // Get the closest parent <li>
-                    if (parentLi) {
-                        const firstSpan = parentLi.querySelector('span.expand-button'); // Get the first span
-                        return firstSpan; // Return the first span
-                    }
-                }
-            }
-            return null;
-        });
+        await page.waitForSelector('i.fa-refresh.fa-spin', { hidden: true, timeout: 30000 });
 
-// Check if the parentElement was found
-        if (parentElement) {
-            console.log("Found the target element. Clicking the first span...");
-            // Log the HTML content of the parent element
-            const parentHTML = await page.evaluate((el) => el.outerHTML, parentElement);
-            console.log("HTML of parentElement:\n", parentHTML);
-            // Click the first span
-            await page.evaluate((el) => el.click(), parentElement);
-        } else {
-            console.log("The target element was not found.");
-        }
-
-
-        if (!parentElement) {
-            console.error("Could not find the specified node.");
-            await browser.close();
-            return;
-        }
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         console.log("Starting recursion from 'Tỉnh/Thành phố Tỉnh Thái Bình'...");

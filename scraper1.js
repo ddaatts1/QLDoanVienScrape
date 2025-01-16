@@ -45,15 +45,15 @@ async function processDropdown(page, parentElement,parentIndex = '') {
         if (childIClass && !childIClass.includes('fa-folder')) {
             // console.log("Skipping as <i> does not have class:  "+childText.trim());
             const insertQuery = `
-            INSERT INTO tochucdoanvien (parentId, name,isfilled, column1, column2, column3, column4, column5, column6, column7, column8, column9, column10, column11, column12, column13, column14, column15, column16, column17, column18, column19, column20, column21, column22, column23, column24, column25)
-            VALUES (?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)
+            INSERT INTO tochucdoanvien (parentId, name,isfilled, column1, column2, column3, column4, column5, column6 )
+            VALUES (?, ?,?, ?, ?, ?, ?, ?, ?)
         `;
 
             const values = [
                 currentChildIndex,  // parentId
                 childText.trim(),    // name
                 0,
-                "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""  // columns 1-25 empty
+                "", "", "", "", "", ""
             ];
 
             db.query(insertQuery, values, (err, results) => {
@@ -75,15 +75,15 @@ async function processDropdown(page, parentElement,parentIndex = '') {
         }
 
         const insertQuery = `
-            INSERT INTO tochucdoanvien (parentId, name,isfilled, column1, column2, column3, column4, column5, column6, column7, column8, column9, column10, column11, column12, column13, column14, column15, column16, column17, column18, column19, column20, column21, column22, column23, column24, column25)
-            VALUES (?, ?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)
+            INSERT INTO tochucdoanvien (parentId, name,isfilled, column1, column2, column3, column4, column5, column6)
+            VALUES (?, ?, ?, ?,?, ?, ?, ?, ?)
         `;
 
         const values = [
             currentChildIndex,  // parentId
             childText.trim(),    // name
             1,
-            "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""  // columns 1-25 empty
+            "", "", "", "", "", ""
         ];
 
         db.query(insertQuery, values, (err, results) => {
@@ -130,8 +130,8 @@ async function scrapeId() {
         await page.waitForSelector('form.login-form');
 
         // Input username and password
-        const username = "tkkiemdinh_captw"; // Replace with your username
-        const password = "Btc@406"; // Replace with your password
+        const username = "tinhdoanthaibinh.tbh"; // Replace with your username
+        const password = "123@xaydungdoan"; // Replace with your password
 
         await page.type('input[formcontrolname="username"]', username); // Adjust the selector
         await page.type('input[formcontrolname="password"]', password); // Adjust the selector
@@ -152,8 +152,16 @@ async function scrapeId() {
 
 
 
-        // await new Promise(resolve => setTimeout(resolve, 10000));
 
+        // Wait and click the div
+        await page.locator('div[role="tab"][id="mat-tab-label-0-1"]').click();
+
+        console.log('Clicked the "Số liệu đoàn viên" tab.');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        await page.waitForSelector('i.fa-refresh.fa-spin', { hidden: true, timeout: 30000 });
+
+        console.log('Loading completed!');
         // Đợi dropdown xuất hiện và click vào
         await page.waitForSelector('button.bdb-dropdown', { visible: true });
         await page.click('button.bdb-dropdown');
@@ -161,41 +169,10 @@ async function scrapeId() {
         // Đợi menu dropdown mở và lấy dữ liệu từ các mục trong menu
         await page.waitForSelector('.dropdown-menu', { visible: true });
 
-        // Bắt đầu từ danh sách cha
-        // Tìm và chọn nút chứa "Tỉnh/Thành phố Tỉnh Thái Bình"
-        // Tìm node "Tỉnh/Thành phố Tỉnh Thái Bình"
-        const parentElement = await page.evaluateHandle(() => {
-            const spans = document.querySelectorAll('span.haschild');
-            for (let i = 0; i < spans.length; i++) {
-                if (spans[i].textContent.trim() === "Tỉnh/Thành phố Tỉnh Thái Bình") {
-                    const parentLi = spans[i].closest('li'); // Get the closest parent <li>
-                    if (parentLi) {
-                        const firstSpan = parentLi.querySelector('span.expand-button'); // Get the first span
-                        return firstSpan; // Return the first span
-                    }
-                }
-            }
-            return null;
-        });
-
-// Check if the parentElement was found
-        if (parentElement) {
-            console.log("Found the target element. Clicking the first span...");
-            // Log the HTML content of the parent element
-            const parentHTML = await page.evaluate((el) => el.outerHTML, parentElement);
-            console.log("HTML of parentElement:\n", parentHTML);
-            // Click the first span
-            await page.evaluate((el) => el.click(), parentElement);
-        } else {
-            console.log("The target element was not found.");
-        }
 
 
-        if (!parentElement) {
-            console.error("Could not find the specified node.");
-            await browser.close();
-            return;
-        }
+
+
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         console.log("Starting recursion from 'Tỉnh/Thành phố Tỉnh Thái Bình'...");
