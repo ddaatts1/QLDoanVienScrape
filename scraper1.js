@@ -107,7 +107,7 @@ async function processDropdown(page, parentElement,parentIndex = '') {
 async function scrapeId() {
     // Launch Puppeteer
     const browser = await puppeteer.launch({
-        headless: false,
+        headless: true,
         args: ['--start-maximized'],
         defaultViewport: {
             width: 1920,

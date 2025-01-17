@@ -30,9 +30,9 @@ async function runScrapers() {
     // Chạy khi ứng dụng khởi động
     await runScrapers();
 
-    // Lên lịch chạy hàng ngày lúc 0:00
-    schedule.scheduleJob("0 0 * * *", async () => {
-        console.log("Running scheduled scraping tasks...");
+// Lên lịch chạy hàng ngày lúc 0:15 sáng
+    schedule.scheduleJob("15 0 * * *", async () => {
+        console.log("Running scheduled scraping tasks at 0:15 AM...");
         await runScrapers();
     });
 

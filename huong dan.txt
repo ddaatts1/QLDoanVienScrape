@@ -1,0 +1,30 @@
+
+
+--- clone
+git clone https://github.com/ddaatts1/QLDoanVienScrape.git
+
+--- tạo database :"scrap_db"
+
+--- tạo bảng :
+CREATE TABLE `tochucdoanvien` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `parentId` varchar(255) DEFAULT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  `column1` text,
+  `column2` text,
+  `column3` text,
+  `column4` text,
+  `column5` text,
+  `column6` text,
+  `isfilled` int DEFAULT '0',
+  `ngay` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=370 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--- vào thư mục gốc của project chạy lệnh :
+node app.js
+
+----hết
+
+chạy định kỳ vào 0h15p
+

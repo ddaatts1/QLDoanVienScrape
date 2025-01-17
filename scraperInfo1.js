@@ -145,12 +145,17 @@ async function processDropdown(page, parentElement,parentIndex = '',id) {
 
 
 
-async function processFilledRecordsInBatches(batchSize = 100,page, parentElement,parentIndex = '') {
+async function processFilledRecordsInBatches(batchSize = 100,page, parentElement,parentIndex = '',browser) {
     try {
         let offset = 0;
         let recordsProcessed = 0;
+        const maxRetries = 50;
+        let attempt = 0;
+        let i=0
 
-        while (true) {
+        while (attempt < maxRetries) {
+            attempt++;
+            let hasError=false
             // Fetch a batch of records
             const selectQuery = `
                 SELECT * FROM ToChucDoanVien WHERE isFilled = 1 LIMIT ? OFFSET ?
@@ -171,7 +176,6 @@ async function processFilledRecordsInBatches(batchSize = 100,page, parentElement
 
             console.log(`Processing batch with ${records.length} records (Offset: ${offset})`);
 
-            let i=0
             // Process each record in the batch
             for (const record of records) {
                 console.log(`Processing record with ID: ${record.parentId}, Name: ${record.name}`);
@@ -186,7 +190,8 @@ async function processFilledRecordsInBatches(batchSize = 100,page, parentElement
                     }else {
                         // Sau khi đăng nhập thành công, chuyển hướng đến URL cần lấy dữ liệu
                         const targetUrl = "https://quanlydoanvien.doanthanhnien.vn/bctk/bao-cao-yum";
-                        await page.goto(targetUrl, { waitUntil: "networkidle2" });
+                        await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 60000 }); // Ensures navigation is complete
+                        await new Promise(resolve => setTimeout(resolve, 2000));
 
 
 
@@ -259,8 +264,9 @@ async function processFilledRecordsInBatches(batchSize = 100,page, parentElement
                                     column4  = ?,
                                     column5  = ?,
                                     column6  = ?,
-                                    isfilled = ?
-                                WHERE parentId = ?`;  // Update based on the `name` column
+                                    isfilled = ?,
+                                    ngay = NOW() 
+                                WHERE parentId = ? And isfilled =1`;  // Update based on the `name` column
 
                             console.log("===========> Updating record for : " + data.col2);
 
@@ -282,15 +288,15 @@ async function processFilledRecordsInBatches(batchSize = 100,page, parentElement
                         else {
                             // Insert new record for subsequent iterations
                             const insertQuery = `
-            INSERT INTO ToChucDoanVien (column1, column2, column3, column4, column5, column6, parentId, isfilled,name)
-            VALUES (?, ?, ?, ?, ?, ?,?, 2,?)`; // Default `isFilled` to 1
+            INSERT INTO ToChucDoanVien (column1, column2, column3, column4, column5, column6, parentId, isfilled,name,ngay)
+            VALUES (?, ?, ?, ?, ?, ?,?, 2,?,  NOW())`; // Default `isFilled` to 1
 
                             console.log("===========> Inserting new record for name:", data.col2);
 
                             // Execute the insert query
                             await new Promise((resolve, reject) => {
                                 db.query(insertQuery, [
-                                    data.col2, data.col3, data.col5, data.col5, data.col6, data.col7,
+                                    data.col2, data.col3, data.col4, data.col5, data.col6, data.col7,
                                      record.parentId, record.name // Use `name` and `parentId` for the new record
                                 ], (insertErr) => {
                                     if (insertErr) {
@@ -312,13 +318,66 @@ async function processFilledRecordsInBatches(batchSize = 100,page, parentElement
 
 
                 } catch (recordError) {
+                    hasError = true
                     console.error(`Error processing record with ID ${record.parentId}:`, recordError);
+                    // Take a screenshot of the error state
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    const screenshotPath = `error-screenshot-${timestamp}.png`;
+                    await page.screenshot({ path: screenshotPath, fullPage: true });
+
+                    console.log(`Screenshot saved: ${screenshotPath}`);
+
+
+                    // reopen
+                    await browser.close();
+                    browser = await puppeteer.launch({
+                        headless: true,
+                        args: ['--start-maximized'],
+                        defaultViewport: {
+                            width: 1920,
+                            height: 1080,
+                        },
+                    });
+
+                     page = await browser.newPage();
+                    const url = "https://quanlydoanvien.doanthanhnien.vn/home";
+                    console.log("Navigating to:", url);
+
+                    // Navigate to the login page
+                    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 }); // Ensures navigation is complete
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+
+                    // Wait for the form to load
+                    await page.waitForSelector('form.login-form');
+
+                    // Input username and password
+                    const username = "tinhdoanthaibinh.tbh"; // Replace with your username
+                    const password = "123@xaydungdoan"; // Replace with your password
+
+                    await page.type('input[formcontrolname="username"]', username); // Adjust the selector
+                    await page.type('input[formcontrolname="password"]', password); // Adjust the selector
+
+                    // Click the submit button (using text "Đăng nhập")
+                    await Promise.all([
+                        page.evaluate(() => {
+                            document.querySelector("button.ant-btn-primary").click();
+                        }),
+                        page.waitForNavigation({ waitUntil: "networkidle2" }),
+                    ]);
+
+                    console.log("Login successful!");
+
+
+
 
                 }
             }
 
             // Increment the offset for the next batch
-            offset += batchSize;
+            if (!hasError){
+                offset += batchSize;
+
+            }
         }
 
         console.log(`Finished processing ${recordsProcessed} records.`);
@@ -336,7 +395,7 @@ async function scrapeInfor() {
 
     // Launch Puppeteer
     const browser = await puppeteer.launch({
-        headless: false,
+        headless: true,
         args: ['--start-maximized'],
         defaultViewport: {
             width: 1920,
@@ -353,7 +412,8 @@ async function scrapeInfor() {
         console.log("Navigating to:", url);
 
         // Navigate to the login page
-        await page.goto(url, { waitUntil: "networkidle2" });
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 }); // Ensures navigation is complete
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         // Wait for the form to load
         await page.waitForSelector('form.login-form');
@@ -377,7 +437,8 @@ async function scrapeInfor() {
 
         // Sau khi đăng nhập thành công, chuyển hướng đến URL cần lấy dữ liệu
         const targetUrl = "https://quanlydoanvien.doanthanhnien.vn/bctk/bao-cao-yum";
-        await page.goto(targetUrl, { waitUntil: "networkidle2" });
+        await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 60000 }); // Ensures navigation is complete
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
 
 
@@ -410,7 +471,7 @@ async function scrapeInfor() {
             return null;
         });
         // await processDropdown(page, parentElementLi,"TB");
-        await processFilledRecordsInBatches(100,page, parentElementLi,"TB");
+        await processFilledRecordsInBatches(100,page, parentElementLi,"TB",browser);
 
 
         await new Promise(resolve => setTimeout(resolve, 2000));
