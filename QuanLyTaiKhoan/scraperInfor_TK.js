@@ -146,14 +146,14 @@ async function processDropdown(page, parentElement,parentIndex = '',id) {
         // Get the text of the child element
         const childText = await page.evaluate(el => el.textContent, child);
         const currentChildIndex = `${parentIndex}.${i}`;  // Format as "1.1", "1.1.1", etc.
+        console.log("=========>currentChildIndex:  "+ currentChildIndex)
 
         if(id==currentChildIndex){
             console.log(`=================> Clicking ${currentChildIndex}: `+ id);
 
-
             await child.click();
 
-            break;
+            // break;
         }
 
         // Check if the <i> tag inside childI has a class other than 'fa-folder'
@@ -166,8 +166,10 @@ async function processDropdown(page, parentElement,parentIndex = '',id) {
             continue; // Skip this iteration if <i> has a different class
         }
 
+        // await new Promise(resolve => setTimeout(resolve, 1000));
+
         // Click the first span to expand
-        if (childI && id.includes(currentChildIndex)) {
+        if (childI && id.includes(currentChildIndex) && !childIClass.includes('fa-folder-open')) {
             console.log(`Clicking on first span to expand children of ${currentChildIndex}`);
             // Log the HTML content of the parent element
             const childIHTML = await page.evaluate((el) => el.outerHTML, childI);
@@ -189,13 +191,18 @@ async function processDropdown(page, parentElement,parentIndex = '',id) {
 
 
 
-async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,parentIndex = '') {
+async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,parentIndex = '',browser) {
     try {
         let offset = 0;
         let recordsProcessed = 0;
+        const maxRetries = 50;
+        let attempt = 0;
         let i=0
 
-        while (true) {
+        while (attempt < maxRetries) {
+            attempt++;
+            let hasError=false
+
             // Fetch a batch of records
             const selectQuery = `
                 SELECT * FROM taikhoan WHERE isFilled = 1 LIMIT ? OFFSET ?
@@ -216,27 +223,24 @@ async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,
 
             console.log(`Processing batch with ${records.length} records (Offset: ${offset})`);
 
+            let currentChildIndex = "TB";  // Format as "1.1", "1.1.1", etc.
             // Process each record in the batch
             for (const record of records) {
-                console.log(`Processing record with ID: ${record.parentId}, Name: ${record.name}`);
+                console.log(`Processing record with ID: ${record.parentId}, Name: ${record.name},currentChildIndex:${currentChildIndex} `);
 
                 try {
                     // Your logic for processing the record
 
 
                     if(i==0){
-                        await processDropdown(page, parentElement,"TB",record.parentId);
+
+                 // let  lastChildElement=      await processDropdown(page, parentElement,currentChildIndex,record.parentId);
+                        await processDropdown(page, parentElement, currentChildIndex, record.parentId);
+
+                        // console.log("Danh sách childElements:", childElements);
 
                     }else {
-                        const targetUrl = "https://quanlydoanvien.doanthanhnien.vn/he-thong/quanly-taikhoan";
-                        await page.goto(targetUrl, { waitUntil: "networkidle2" });
-                        // await page.waitForSelector('button.bdb-dropdown', { timeout: 10000 });
-                        // await page.click('button.bdb-dropdown');
 
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-
-                        // // Đợi menu dropdown mở và lấy dữ liệu từ các mục trong menu
-                        // await page.waitForSelector('.dropdown-menu', { visible: true });
 
                         // Bắt đầu từ danh sách cha
                         // Tìm và chọn nút chứa "Tỉnh/Thành phố Tỉnh Thái Bình"
@@ -266,15 +270,59 @@ async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,
 
                             // Click the first span
                             await page.evaluate((el) => el.click(), parentElement1);
+                            console.log("================> close thai ninh\n");
+
+
                         } else {
                             console.log("The target element was not found.");
                         }
+
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+
+                        // mo lai
+
+
+                        const parentElement2 = await page.evaluateHandle(() => {
+                            const spans = document.querySelectorAll('span.haschild');
+                            for (let i = 0; i < spans.length; i++) {
+                                if (spans[i].textContent.trim() === "Tỉnh/Thành phố Tỉnh Thái Bình") {
+                                    const parentLi = spans[i].closest('li'); // Get the closest parent <li>
+                                    if (parentLi) {
+                                        const firstSpan = parentLi.querySelector('span.expand-button'); // Get the first span
+                                        return firstSpan; // Return the first span
+                                    }
+                                }
+                            }
+                            return null;
+                        });
+
+// Check if the parentElement was found
+                        if (parentElement2) {
+                            console.log("Found the target element. Clicking the first span...");
+
+                            // Log the HTML content of the parent element
+                            const parentHTML = await page.evaluate((el) => el.outerHTML, parentElement2);
+                            console.log("HTML of parentElement2:\n", parentHTML);
+
+                            // Click the first span
+                            await page.evaluate((el) => el.click(), parentElement2);
+                            console.log("================> open thai ninh\n");
+
+
+                        } else {
+                            console.log("The target element was not found.");
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+
+
+
+
+
                         if (!parentElement) {
                             console.error("Could not find the specified node.");
                             await browser.close();
                             return;
                         }
-                        await new Promise(resolve => setTimeout(resolve, 2000));
 
                         console.log("Starting recursion from 'Tỉnh/Thành phố Tỉnh Thái Bình'...");
 
@@ -289,7 +337,7 @@ async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,
                             return null;
                         });
 
-                        await processDropdown(page, parentElementLi,"TB",record.parentId);
+                        await processDropdown(page, parentElementLi,currentChildIndex,record.parentId);
 
 
                     }
@@ -306,7 +354,7 @@ async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,
                     const jsonData = tableData.map((row) => ({
                         col1: row[0],   // Cột 1
                         col2: row[1],   // Cột 2
-                        col3: row[2],   // Cột 3 (thường là cột phần trăm)
+                        col3: row[2],   // Cột 3
                         col4: row[3],   // Cột 4
                     }));
                     // console.log("Extracted tableDataName:", tableDataName);
@@ -315,66 +363,99 @@ async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,
                     // console.log("Extracted JSON Data:", JSON.stringify(jsonData, null, 2));
                     // console.log("Extracted JSON Data length:", jsonData.length);
 
-                    for (let i = 0; i < tableData.length; i++) {
-                        const name = tableData[i][1]; // Extract the Name
-                        const data = jsonData[i]; // Extract the data for that name
-
-
-                        if (i === 0) {
-
-                            // Update query using `name` instead of `id`
-                            const updateQuery = `
+                    if (tableData.length ==0){
+                        // Update query using `name` instead of `id`
+                        const updateQuery = `
                                 UPDATE taikhoan
                                 SET column1  = ?,
                                     column2  = ?,
                                     column3  = ?,
                                     column4  = ?,
-                                    isfilled = ?
+                                    isfilled = ?,
+                                    ngay = NOW()
                                 WHERE parentId = ?`;  // Update based on the `name` column
 
-                            console.log("===========> Updating record for : " + record.parentId);
+                        console.log("===========> Updating record for : " + record.parentId);
 
-                            // Execute the query to update the record
-                            await new Promise((resolve, reject) => {
-                                db.query(updateQuery, [
-                                     data.col1, data.col2, data.col3,data.col4, 2,
-                                    record.parentId // Use `name` to match the record to be updated
-                                ], (updateErr) => {
-                                    if (updateErr) {
-                                        console.log("Error updating record: ", updateErr);
-                                        return reject(updateErr); // Reject if there's an error
-                                    }
-                                    console.log("Record updated successfully for: " + name);
-                                    resolve(); // Resolve once the update is successful
-                                });
+                        // Execute the query to update the record
+                        await new Promise((resolve, reject) => {
+                            db.query(updateQuery, [
+                                "", "", "","", 2,
+                                record.parentId // Use `name` to match the record to be updated
+                            ], (updateErr) => {
+                                if (updateErr) {
+                                    console.log("Error updating record: ", updateErr);
+                                    return reject(updateErr); // Reject if there's an error
+                                }
+                                resolve(); // Resolve once the update is successful
                             });
-                        }
-                        else {
-                            // Insert new record for subsequent iterations
-                            const insertQuery = `
-            INSERT INTO taikhoan (column1, column2, column3, column4, parentId, name, isfilled)
-            VALUES (?, ?, ?, ?, ?, ?, 2)`; // Default `isFilled` to 1
+                        });
+                    }
+                    else {
+                        for (let i = 0; i < tableData.length; i++) {
+                            const name = tableData[i][1]; // Extract the Name
+                            const data = jsonData[i]; // Extract the data for that name
 
-                            console.log("===========> Inserting new record for name:", name);
 
-                            // Execute the insert query
-                            await new Promise((resolve, reject) => {
-                                db.query(insertQuery, [
-                                    data.col1, data.col2, data.col3, data.col4,
-                                    record.parentId, record.name // Use `name` and `parentId` for the new record
-                                ], (insertErr) => {
-                                    if (insertErr) {
-                                        console.error("Error inserting record:", insertErr);
-                                        return reject(insertErr);
-                                    }
-                                    console.log("New record inserted successfully!");
-                                    resolve();
+                            if (i === 0) {
+
+                                // Update query using `name` instead of `id`
+                                const updateQuery = `
+                                UPDATE taikhoan
+                                SET column1  = ?,
+                                    column2  = ?,
+                                    column3  = ?,
+                                    column4  = ?,
+                                    isfilled = ?,
+                                    ngay = NOW()
+                                WHERE parentId = ?`;  // Update based on the `name` column
+
+                                console.log("===========> Updating record for : " + record.parentId);
+
+                                // Execute the query to update the record
+                                await new Promise((resolve, reject) => {
+                                    db.query(updateQuery, [
+                                        data.col1, data.col2, data.col3,data.col4, 2,
+                                        record.parentId // Use `name` to match the record to be updated
+                                    ], (updateErr) => {
+                                        if (updateErr) {
+                                            console.log("Error updating record: ", updateErr);
+                                            return reject(updateErr); // Reject if there's an error
+                                        }
+                                        console.log("Record updated successfully for: " + name);
+                                        resolve(); // Resolve once the update is successful
+                                    });
                                 });
-                            });
-                        }
+                            }
+                            else {
+                                // Insert new record for subsequent iterations
+                                const insertQuery = `
+            INSERT INTO taikhoan (column1, column2, column3, column4, parentId, name, isfilled,ngay)
+            VALUES (?, ?, ?, ?, ?, ?, 2,NOW())`; // Default `isFilled` to 1
 
+                                console.log("===========> Inserting new record for name:", name);
+
+                                // Execute the insert query
+                                await new Promise((resolve, reject) => {
+                                    db.query(insertQuery, [
+                                        data.col1, data.col2, data.col3, data.col4,
+                                        record.parentId, record.name // Use `name` and `parentId` for the new record
+                                    ], (insertErr) => {
+                                        if (insertErr) {
+                                            console.error("Error inserting record:", insertErr);
+                                            return reject(insertErr);
+                                        }
+                                        console.log("New record inserted successfully!");
+                                        resolve();
+                                    });
+                                });
+                            }
+
+
+                        }
 
                     }
+
 
 
                     recordsProcessed++;
@@ -382,15 +463,102 @@ async function processFilledRecordsInBatches(batchSize = 10,page, parentElement,
 
 
                 } catch (recordError) {
+                    hasError = true
                     console.error(`Error processing record with ID ${record.parentId}:`, recordError);
+                    // Take a screenshot of the error state
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    const screenshotPath = `error-screenshot-${timestamp}.png`;
+                    await page.screenshot({ path: screenshotPath, fullPage: true });
+
+                    console.log(`Screenshot saved: ${screenshotPath}`);
+
+
+                    // reopen
+                    await browser.close();
+                    browser = await puppeteer.launch({
+                        headless: false,
+                        args: ['--start-maximized'],
+                        defaultViewport: {
+                            width: 1920,
+                            height: 1080,
+                        },
+                    });
+
+                    page = await browser.newPage();
+                    const url = "https://quanlydoanvien.doanthanhnien.vn/login";
+                    console.log("Navigating to:", url);
+
+                    // Navigate to the login page
+                    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 }); // Ensures navigation is complete
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+
+                    // Wait for the form to load
+                    await page.waitForSelector('form.login-form');
+
+                    // Input username and password
+                    const username = "tkkiemdinh_captw"; // Replace with your username
+                    const password = "Btc@406"; // Replace with your password
+
+                    await page.type('input[formcontrolname="username"]', username); // Adjust the selector
+                    await page.type('input[formcontrolname="password"]', password); // Adjust the selector
+
+                    // Click the submit button (using text "Đăng nhập")
+                    await Promise.all([
+                        page.evaluate(() => {
+                            document.querySelector("button.ant-btn-primary").click();
+                        }),
+                        page.waitForNavigation({ waitUntil: "networkidle2" }),
+                    ]);
+
+                    console.log("Login successful!");
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+
                     // Sau khi đăng nhập thành công, chuyển hướng đến URL cần lấy dữ liệu
                     const targetUrl = "https://quanlydoanvien.doanthanhnien.vn/he-thong/quanly-taikhoan";
                     await page.goto(targetUrl, { waitUntil: "networkidle2" });
+                    await new Promise(resolve => setTimeout(resolve, 10000));
+
+                    const parentElement2 = await page.evaluateHandle(() => {
+                        const spans = document.querySelectorAll('span.haschild');
+                        for (let i = 0; i < spans.length; i++) {
+                            if (spans[i].textContent.trim() === "Tỉnh/Thành phố Tỉnh Thái Bình") {
+                                const parentLi = spans[i].closest('li'); // Get the closest parent <li>
+                                if (parentLi) {
+                                    const firstSpan = parentLi.querySelector('span.expand-button'); // Get the first span
+                                    return firstSpan; // Return the first span
+                                }
+                            }
+                        }
+                        return null;
+                    });
+
+// Check if the parentElement was found
+                    if (parentElement2) {
+                        console.log("Found the target element. Clicking the first span...");
+
+                        // Log the HTML content of the parent element
+                        const parentHTML = await page.evaluate((el) => el.outerHTML, parentElement2);
+                        console.log("HTML of parentElement2:\n", parentHTML);
+
+                        // Click the first span
+                        await page.evaluate((el) => el.click(), parentElement2);
+                        console.log("================> open thai ninh\n");
+
+
+                    } else {
+                        console.log("The target element was not found.");
+                    }
+
+
+
                 }
             }
 
             // Increment the offset for the next batch
-            offset += batchSize;
+            if (!hasError){
+                offset += batchSize;
+
+            }
         }
 
         console.log(`Finished processing ${recordsProcessed} records.`);
@@ -421,7 +589,7 @@ async function scrapeInfor() {
     const page = await browser.newPage();
 
     try {
-        const url = "https://quanlydoanvien.doanthanhnien.vn/home";
+        const url = "https://quanlydoanvien.doanthanhnien.vn/login";
         console.log("Navigating to:", url);
 
         // Navigate to the login page
@@ -453,7 +621,7 @@ async function scrapeInfor() {
 
 
 
-        // await new Promise(resolve => setTimeout(resolve, 10000));
+        await new Promise(resolve => setTimeout(resolve, 10000));
 
         // Đợi dropdown xuất hiện và click vào
         // await page.waitForSelector('button.bdb-dropdown', { visible: true });
@@ -513,7 +681,7 @@ async function scrapeInfor() {
             return null;
         });
         // await processDropdown(page, parentElementLi,"TB");
-        await processFilledRecordsInBatches(100,page, parentElementLi,"TB");
+        await processFilledRecordsInBatches(100,page, parentElementLi,"TB",browser);
 
 
         await new Promise(resolve => setTimeout(resolve, 2000));

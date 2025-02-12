@@ -321,11 +321,11 @@ async function processFilledRecordsInBatches(batchSize = 100,page, parentElement
                     hasError = true
                     console.error(`Error processing record with ID ${record.parentId}:`, recordError);
                     // Take a screenshot of the error state
-                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                    const screenshotPath = `error-screenshot-${timestamp}.png`;
-                    await page.screenshot({ path: screenshotPath, fullPage: true });
-
-                    console.log(`Screenshot saved: ${screenshotPath}`);
+                    // const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    // const screenshotPath = `error-screenshot-${timestamp}.png`;
+                    // await page.screenshot({ path: screenshotPath, fullPage: true });
+                    //
+                    // console.log(`Screenshot saved: ${screenshotPath}`);
 
 
                     // reopen
@@ -353,6 +353,7 @@ async function processFilledRecordsInBatches(batchSize = 100,page, parentElement
                     // Input username and password
                     const username = "tinhdoanthaibinh.tbh"; // Replace with your username
                     const password = "123@xaydungdoan"; // Replace with your password
+
 
                     await page.type('input[formcontrolname="username"]', username); // Adjust the selector
                     await page.type('input[formcontrolname="password"]', password); // Adjust the selector
